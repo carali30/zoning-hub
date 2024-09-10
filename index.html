@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>ArcGIS Map with Left Side Panel</title>
+
+    <style>
+            html, body {
+            padding: 0;
+            margin: 0;
+            height: 100%;
+            width: 100%;
+            display: flex;
+        }
+
+        #panelDiv {
+            width: 200px;
+            padding: 10px;
+            background-color: #f8f8f8;
+            border-right: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            resize: horizontal;
+        }
+
+        #filterForm {
+            flex-grow: 1;
+            overflow-y: auto; /* Allows scrolling if the list is too long */
+        }
+
+        #viewDiv {
+            flex: 1;
+        }
+
+        .filter-option {
+            margin-bottom: 10px;
+            font-family: Avenir Next;
+            font-size: 1em;
+        }
+
+        .filter-option input {
+            margin-right: 10px;
+        }
+
+        #landUseList {
+            display: none; /* Hidden by default */
+            width: 300px; /* Same width as #panelDiv */
+            margin-top: 20px;
+            overflow-y: auto; /* Enables scrolling */
+            font-family: Avenir Next;
+            font-size: 1em;
+            color: #555;
+            resize: horizontal;
+        }
+
+        #loadingReminder {
+            font-family: Avenir Next;
+            font-size: 1em;
+            color: #555;
+        }
+    </style>
+
+    <link rel="stylesheet" href="https://js.arcgis.com/4.30/esri/themes/light/main.css">
+    <script src="https://js.arcgis.com/4.30/"></script>
+</head>
+<body>
+    <div id="panelDiv">
+        <h3>Filter Options</h3>
+        <form id="filterForm">
+            <!-- Options will be dynamically added here -->
+        </form>
+        <div id="loadingReminder">Loading...</div>
+    </div>
+    <div id="landUseList"></div>
+    <div id="viewDiv"></div>
+
+    <script>
+            require([
+            "esri/config",
+            "esri/Map",
+            "esri/views/MapView",
+            "esri/layers/FeatureLayer"
+        ], function(esriConfig, Map, MapView, FeatureLayer) {
+
+            esriConfig.apiKey = "AAPTxy8BH1VEsoebNVZXo8HurCuEtqXESJjOc_4rNDoUUkeJf4O4oIbyYSdgPu6PuQukPsvwICFlyGOBspGZQsqLzyVffH4nOn_aOPMy5dmLmfQ9Bq0QGvqr--FNFu8AJFh3vvBV2KcMBSu3XfjSt1P8dndEbY7kwhvwyE6Ki6dSLl8fbD-4n0LTNq3dqTXglL7jo9XWp5B719E-2VmNm77CrA9Mjq0YvizQIETPbdV3f8U.AT1_l1Fm6O49";
+
+            const map = new Map({
+                basemap: "arcgis/topographic"
+            });
+
+            const view = new MapView({
+                map: map,
+                center: [-93.75, 32.51],
+                zoom: 13,
+                container: "viewDiv",
+                highlightEnabled: true
+            });
+
+            const filterForm = document.getElementById("filterForm");
+            const loadingReminder = document.getElementById("loadingReminder");
+            const landUseList = document.getElementById("landUseList");
+
+            // SQL filter expressions
+            const sqlExpressions = [
+                { label: "Select a Zoning ID", value: "1=1" }, 
+                { label: "R-A", value: "BASE_ZONE = 'R-A'" }, 
+                { label: "R-E", value: "BASE_ZONE = 'R-E'" }, 
+                { label: "R-1-12", value: "BASE_ZONE = 'R-1-12'" }, 
+                { label: "R-1-10", value: "BASE_ZONE = 'R-1-10'" }, 
+                { label: "R-1-7", value: "BASE_ZONE = 'R-1-7'" }, 
+                { label: "R-1-5", value: "BASE_ZONE = 'R-1-5'" }, 
+                { label: "R-UC", value: "BASE_ZONE = 'R-UC'" }, 
+                { label: "R-HU", value: "BASE_ZONE = 'R-HU'" }, 
+                { label: "R-TH", value: "BASE_ZONE = 'R-TH'" }, 
+                { label: "R-2", value: "BASE_ZONE = 'R-2'" }, 
+                { label: "R-3", value: "BASE_ZONE = 'R-3'" }, 
+                { label: "R-4", value: "BASE_ZONE = 'R-4'" }, 
+                { label: "R-MUV", value: "BASE_ZONE = 'R-MUV'" }, 
+                { label: "R-MHS", value: "BASE_ZONE = 'R-MHS'" }, 
+                { label: "R-MHP", value: "BASE_ZONE = 'R-MHP'" }, 
+                { label: "C-1", value: "BASE_ZONE = 'C-1'" }, 
+                { label: "C-2", value: "BASE_ZONE = 'C-2'" }, 
+                { label: "C-3", value: "BASE_ZONE = 'C-3'" }, 
+                { label: "C-4", value: "BASE_ZONE = 'C-4'" }, 
+                { label: "C-UC", value: "BASE_ZONE = 'C-UC'" }, 
+                { label: "C-UV", value: "BASE_ZONE = 'C-UV'" }, 
+                { label: "D-1- CBD", value: "BASE_ZONE = 'D-1- CBD'" }, 
+                { label: "D-1- E", value: "BASE_ZONE = 'D-1- E'" }, 
+                { label: "D-1- CMU", value: "BASE_ZONE = 'D-1- CMU'" }, 
+                { label: "D-1- RMU", value: "BASE_ZONE = 'D-1- RMU'" }, 
+                { label: "D-1- AC", value: "BASE_ZONE = 'D-1- AC'" }, 
+                { label: "D-1- HC", value: "BASE_ZONE = 'D-1- HC'" }, 
+                { label: "OR", value: "BASE_ZONE = 'OR'" }, 
+                { label: "I-MU", value: "BASE_ZONE = 'I-MU'" }, 
+                { label: "I-1", value: "BASE_ZONE = 'I-1'" }, 
+                { label: "I-2", value: "BASE_ZONE = 'I-2'" }, 
+                { label: "NA", value: "BASE_ZONE = 'NA'" }, 
+                { label: "OS", value: "BASE_ZONE = 'OS'" }, 
+                { label: "IC", value: "BASE_ZONE = 'IC'" }
+            ];
+
+            // Populate the form with radio buttons
+            sqlExpressions.forEach(function(sql, index) {
+                let div = document.createElement("div");
+                div.className = "filter-option";
+                
+                let input = document.createElement("input");
+                input.type = "radio";
+                input.name = "filter";
+                input.value = sql.value;
+                input.id = `filter${index}`;
+                input.checked = index === 0; // Default checked is the first one
+
+                let label = document.createElement("label");
+                label.htmlFor = `filter${index}`;
+                label.innerText = sql.label;
+
+                div.appendChild(input);
+                div.appendChild(label);
+                filterForm.appendChild(div);
+            });
+
+            // Feature Layer
+            const featureLayer = new FeatureLayer({
+                url: "https://services3.arcgis.com/cEsSI6IR59h5UGE4/arcgis/rest/services/UDC_ZONING_PLANNING_LIMITS/FeatureServer/2",
+                outFields: ["*"],
+                popupTemplate: {
+                    title: "{BASE_ZONE}",
+                    content: "<b>Address:</b> {PROP_ADDRE}<br><b>Property Owner:</b> {OWNER}<br><b>Legal Description:</b> {LEGAL_DESC}<br>"
+                },
+                definitionExpression: "1=1" // Initial filter
+            });
+            map.add(featureLayer);
+
+            // Set the filter based on the radio button selection
+            function setFeatureLayerFilter(expression) {
+                loadingReminder.innerText = "Loading...";
+                featureLayer.definitionExpression = expression;
+                featureLayer.queryFeatureCount().then(function(count) {
+                    loadingReminder.innerText = "Features found: " + count;
+                }).catch(function(error) {
+                    loadingReminder.innerText = "Error loading features";
+                    console.error("Error querying feature count: ", error);
+                });
+            }
+
+            // Load CSV data and initialize event listeners
+            loadCSVData('mylanduse.csv').then(landUseData => {
+                // Event listener for the radio buttons
+                filterForm.addEventListener('change', function(event) {
+                    const selectedValue = event.target.value;
+                    setFeatureLayerFilter(selectedValue);
+                    
+                    // Show/hide the landUseList based on the selection
+                    if (selectedValue === "1=1") {
+                        landUseList.style.display = "none"; // Hide if "Choose a SQL where clause..."
+                    } else {
+                        landUseList.style.display = "block"; // Show if a valid zoning ID is selected
+                        let district = selectedValue.match(/BASE_ZONE = '(.*?)'/);
+                        if (district && district[1] && landUseData[district[1]]) {
+                            const landUses = landUseData[district[1]];
+                            landUseList.innerHTML = "<h3>Land Uses:</h3><ul>" + landUses.map(function(landUse) {
+                                return "<li>" + landUse + "</li>";
+                            }).join("") + "</ul>";
+                        } else {
+                            landUseList.innerHTML = "<strong>Land Uses:</strong> <em>Select a Zoning ID</em>";
+                        }
+                    }
+                });
+
+                // Initial load
+                setFeatureLayerFilter(sqlExpressions[0].value);
+            });
+
+            // Load and parse CSV function
+            function loadCSVData(url) {
+                return fetch(url)
+                    .then(response => response.text())
+                    .then(text => {
+                        const rows = text.split('\n').map(row => row.split(','));
+                        const districts = rows.shift(); // First row as headers (districts)
+                        const landUseData = {};
+
+                        districts.forEach((district, index) => {
+                            landUseData[district.trim()] = [];
+                            rows.forEach(row => {
+                                if (row[index]) {
+                                    landUseData[district.trim()].push(row[index].trim());
+                                }
+                            });
+                        });
+
+                        return landUseData;
+                    });
+            }
+        });
+
+    </script>
+</body>
+</html>
